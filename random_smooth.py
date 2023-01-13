@@ -10,13 +10,14 @@ class RandSmoothedClassifier(nn.Module):
     Define a randomly smoothed classifier based on a chosen base classifier.
     """
 
-    def __init__(self, base_classifier, c, sigma, abstain=-1):
+    def __init__(self, base_classifier, c, sigma, device, abstain=-1):
         """
         Initialize the randomly smoothed classifier
 
         :param base_classifier: a base classifier
         :param c: number of possible classes
         :param sigma: parameter used to define the variance in a normal distribution
+        :param device: pytorch device handling
         :param abstain: value to be returned when smoothed classifier should abstain
         """
 
@@ -25,6 +26,7 @@ class RandSmoothedClassifier(nn.Module):
         self.base_classifier = base_classifier
         self.c = c
         self.sigma = sigma
+        self.device = device
         self.abstain = abstain
 
     def sample_under_noise(self, x, n, batch_size):
@@ -38,9 +40,9 @@ class RandSmoothedClassifier(nn.Module):
         """
 
         # create tensor containing all classes (from 0 to c-1)
-        classes = torch.arange(self.c)
+        classes = torch.arange(self.c).to(self.device)
 
-        class_counts = torch.zeros([self.c])
+        class_counts = torch.zeros([self.c]).to(self.device)
 
         # sample and evaluate perturbed samples in batches
         remaining_samples = n
@@ -111,9 +113,10 @@ class RandSmoothedClassifier(nn.Module):
 
         # generate samples to estimate/guess lower bound of p_a
         counts = self.sample_under_noise(x, n, batch_size)
-        # TODO: check this
-        # p_a = proportion_confint(counts[c_a], nobs=n, alpha=(1 - alpha), method='binom_test')
-        p_a = proportion_confint(counts[c_a], nobs=n, alpha=2 * alpha, method="beta")[0]
+        
+        # note: used code from MLGS as I couldn't find a working implementation to get a lower bound
+        # didn't work: p_a = proportion_confint(..., method='binom_test')
+        p_a = proportion_confint(counts[c_a].cpu(), nobs=n, alpha=2 * alpha, method="beta")[0]
 
         if p_a > 0.5:
             return c_a, self.sigma * norm.ppf(p_a)  # norm.ppf = Phi^(-1)
